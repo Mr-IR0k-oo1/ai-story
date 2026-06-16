@@ -1,0 +1,16 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Story {
+  id        String   @id
+  events    String
+  world     String
+  summary   String   @default("")
+  createdAt DateTime @default(now())
+}
