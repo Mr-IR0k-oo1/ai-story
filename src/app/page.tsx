@@ -175,8 +175,14 @@ export default function Home() {
       }
 
       setShareUrl(data.url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save story");
+    } catch {
+      const text = story.events.map((e) => e.text).join("\n\n");
+      try {
+        await navigator.clipboard.writeText(text);
+        setError("Story copied to clipboard (save unavailable in this deployment)");
+      } catch {
+        setError("Could not save or copy story");
+      }
     } finally {
       setIsSaving(false);
     }

@@ -38,6 +38,7 @@ export function StoryBox({
   onSave,
 }: StoryBoxProps) {
   const listRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -47,10 +48,12 @@ export function StoryBox({
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-white">One Button Story</h1>
+        <h1 className="font-display text-xl font-bold tracking-tight text-white">
+          One Button Story
+        </h1>
         <button
           onClick={onReset}
-          className="text-sm text-gray-600 hover:text-gray-300 transition-colors"
+          className="text-xs text-gray-600 transition-colors hover:text-gray-400"
         >
           Reset
         </button>
@@ -58,65 +61,86 @@ export function StoryBox({
 
       <div
         ref={listRef}
-        className="max-h-[60vh] overflow-y-auto space-y-4 scroll-smooth"
+        className="max-h-[60vh] overflow-y-auto rounded-xl border border-border bg-card scroll-smooth"
+        style={{ scrollbarWidth: "thin", scrollbarColor: "#1e1e29 transparent" }}
       >
-        {events.map((ev, i) => {
-          const img = sceneImages.find((s) => s.eventIndex === i);
-          return (
-            <div key={i} className="animate-fade-in-up">
-              <p className="text-[15px] leading-relaxed text-gray-200">
-                {ev.text}
-              </p>
-              {ev.type === "twist" && (
-                <span className="mt-1 inline-block text-[10px] uppercase tracking-widest text-amber-500/70">
-                  * twist
-                </span>
-              )}
-              {img && (
-                <img
-                  src={img.url}
-                  alt=""
-                  className="mt-3 w-full rounded-lg border border-gray-800"
-                  loading="lazy"
-                />
-              )}
-              {i < events.length - 1 && (
-                <hr className="mt-4 border-gray-800/50" />
-              )}
-            </div>
-          );
-        })}
+        <div className="space-y-0">
+          {events.map((ev, i) => {
+            const img = sceneImages.find((s) => s.eventIndex === i);
+            const isLast = i === events.length - 1;
+            return (
+              <div
+                key={i}
+                className={`animate-fade-in-up border-b border-border/50 last:border-0 ${isLast ? "" : ""}`}
+              >
+                <div className="px-5 py-4">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 shrink-0 text-[10px] font-medium text-gray-600 w-5 text-right">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-relaxed text-gray-300">
+                        {ev.text}
+                      </p>
+                      {ev.type === "twist" && (
+                        <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-widest text-accent">
+                          <span className="inline-block w-1 h-1 rounded-full bg-accent/60" />
+                          Twist
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {img && (
+                    <img
+                      src={img.url}
+                      alt=""
+                      className="mt-3 ml-8 w-full rounded-lg border border-border"
+                      loading="lazy"
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
-        {isLoading && (
-          <div className="animate-fade-in-up pt-2">
-            <LoadingDots />
-          </div>
-        )}
+          {isLoading && (
+            <div className="px-5 py-4">
+              <div className="flex items-center gap-3">
+                <span className="shrink-0 text-[10px] font-medium text-gray-600 w-5 text-right">
+                  {events.length + 1}
+                </span>
+                <LoadingDots />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-5 mb-6">
         <div className="flex items-center gap-3">
-          <div className="h-1 flex-1 rounded-full bg-gray-800">
+          <div className="h-1 flex-1 rounded-full bg-border">
             <div
-              className="h-full rounded-full bg-gray-500 transition-all duration-300"
+              className="h-full rounded-full bg-accent/70 transition-all duration-500 ease-out"
               style={{
                 width: `${Math.min((events.length / 20) * 100, 100)}%`,
               }}
             />
           </div>
-          <span className="text-xs text-gray-600">
-            {events.length}/{20}
+          <span className="text-xs tabular-nums text-gray-600">
+            {events.length}/20
           </span>
         </div>
       </div>
 
       {error && (
-        <p className="mb-4 text-sm text-red-400">{error}</p>
+        <p className="mb-4 animate-fade-in text-center text-sm text-red-400">
+          {error}
+        </p>
       )}
 
       {isEnding ? (
         <div className="py-10 text-center">
-          <p className="mb-2 text-2xl font-bold text-white/80 tracking-wide">
+          <p className="mb-2 font-display text-3xl font-bold tracking-wide text-white/90">
             THE END
           </p>
           <p className="mb-6 text-sm text-gray-600">
@@ -135,7 +159,7 @@ export function StoryBox({
               variant="ghost"
               onClick={onSave}
               disabled={isSaving || !!shareUrl}
-              className="border border-gray-800 px-6 py-3"
+              className="border border-border px-6 py-3"
             >
               {isSaving ? "Saving..." : shareUrl ? "Saved" : "Save"}
             </Button>
@@ -166,7 +190,7 @@ export function StoryBox({
             variant="ghost"
             onClick={onSave}
             disabled={isSaving || !!shareUrl}
-            className="w-full border border-gray-800 py-3"
+            className="w-full border border-border py-3"
           >
             {isSaving ? "Saving..." : shareUrl ? "Saved" : "Save & Share"}
           </Button>
@@ -174,7 +198,7 @@ export function StoryBox({
       )}
 
       {shareUrl && (
-        <p className="mt-4 text-center text-xs text-gray-600">
+        <p className="mt-4 animate-fade-in text-center text-xs text-gray-600">
           {typeof window !== "undefined" &&
             `${window.location.origin}${shareUrl}`}
           <button
@@ -185,7 +209,7 @@ export function StoryBox({
                   : shareUrl
               )
             }
-            className="ml-2 text-gray-400 hover:text-gray-200 transition-colors"
+            className="ml-2 text-accent/70 transition-colors hover:text-accent"
           >
             [copy]
           </button>

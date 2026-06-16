@@ -11,7 +11,7 @@ function requireEnv(name: string): string {
 
 export const env = {
   MISTRAL_API_KEY: requireEnv("MISTRAL_API_KEY"),
-  DATABASE_URL: requireEnv("DATABASE_URL"),
+  DATABASE_URL: process.env.DATABASE_URL || "",
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
   RATE_LIMIT_MAX: Number(process.env.RATE_LIMIT_MAX) || 30,
   RATE_LIMIT_WINDOW_MS: Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000,

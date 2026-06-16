@@ -9,13 +9,21 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!prisma) {
+      return NextResponse.json(
+        { error: "Story loading is not available in this deployment", code: "STORAGE_UNAVAILABLE" },
+        { status: 503 }
+      );
+    }
+    const db = prisma;
+
     const { id } = await params;
 
     if (!ID_REGEX.test(id)) {
       throw new ValidationError("Invalid story ID format");
     }
 
-    const story = await prisma.story.findUnique({ where: { id } });
+    const story = await db.story.findUnique({ where: { id } });
 
     if (!story) {
       throw new NotFoundError("Story not found");

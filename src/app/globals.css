@@ -2,6 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --color-accent: #f59e0b;
+    --color-accent-muted: #f59e0b66;
+    --color-surface: #0a0a0f;
+    --color-card: #111118;
+    --color-border: #1e1e29;
+    --color-text: #e4e4ed;
+    --color-text-muted: #6b6b80;
+  }
+
+  ::selection {
+    background: var(--color-accent-muted);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1e1e29;
+    border-radius: 2px;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
 @layer utilities {
   .bounce-delay-200 {
     animation-delay: 0.2s;
@@ -9,19 +48,4 @@
   .bounce-delay-400 {
     animation-delay: 0.4s;
   }
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  color-scheme: dark;
-}
-
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }

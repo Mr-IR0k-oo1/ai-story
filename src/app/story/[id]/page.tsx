@@ -9,7 +9,11 @@ interface Props {
 export default async function SharedStoryPage({ params }: Props) {
   const { id } = await params;
 
-  const story = await prisma.story.findUnique({ where: { id } });
+  if (!prisma) {
+    notFound();
+  }
+  const db = prisma;
+  const story = await db.story.findUnique({ where: { id } });
 
   if (!story) {
     notFound();

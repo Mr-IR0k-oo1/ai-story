@@ -59,15 +59,23 @@ function validate(body: unknown): SaveBody {
 
 export async function POST(request: Request) {
   try {
+    if (!prisma) {
+      return NextResponse.json(
+        { error: "Story saving is not available in this deployment", code: "STORAGE_UNAVAILABLE" },
+        { status: 503 }
+      );
+    }
+    const db = prisma;
+
     const body: unknown = await request.json();
     const { events, world, summary } = validate(body);
 
     const id = await generateUniqueId(async (id) => {
-      const existing = await prisma.story.findUnique({ where: { id } });
+      const existing = await db.story.findUnique({ where: { id } });
       return existing !== null;
     });
 
-    await prisma.story.create({
+    await db.story.create({
       data: {
         id,
         events: JSON.stringify(events),
