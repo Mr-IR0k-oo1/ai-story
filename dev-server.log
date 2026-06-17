@@ -1,0 +1,7 @@
+   ▲ Next.js 15.1.0
+   - Local:        http://localhost:3000
+   - Network:      http://169.254.83.107:3000
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 4.5s

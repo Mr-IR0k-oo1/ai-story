@@ -1,9 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  serverRuntimeConfig: {
-    bodySizeLimit: "100kb",
-  },
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

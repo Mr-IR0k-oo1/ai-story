@@ -1,101 +1,46 @@
 import { Mistral } from "@mistralai/mistralai";
-import OpenAI from "openai";
 import { env } from "./env";
 
 export const mistral = new Mistral({
   apiKey: env.MISTRAL_API_KEY,
 });
 
-const openai = env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
-  : null;
+export const SYSTEM_PROMPT = `You are the narrator of an absurd comedy world. The user has a persistent character moving through a living world.
 
-export const STORYTELLER_SYSTEM_PROMPT = `You are an absurd comedy storyteller.
+Every event affects the world. You control what happens, what the character finds, and where they go.
 
 Rules:
-- Continue the story by exactly one event.
-- Maximum 20 words.
-- Make it funny.
-- Maintain consistency with the established story.
-- Recurring characters should behave consistently.
-- End with suspense.
-- The story should reach a conclusion around 18-20 events total.
-- Output ONLY the event text, nothing else.`;
+- Continue the story by one event (under 30 words).
+- Make it funny and absurd.
+- Stay consistent with the world state.
+- When the user asks for a TWIST, escalate the conflict unexpectedly.
+- Occasionally add items to the inventory (about 25% of events).
+- Occasionally change location when the story naturally moves (about 15% of events).
+- Record a memorable one-sentence memory when something notable happens (about 40% of events).
+- When changing location, also provide a short vivid description for the new location (under 15 words).
 
-export const TWIST_SYSTEM_PROMPT = `You are an absurd comedy storyteller introducing a TWIST.
+Output ONLY valid JSON. No markdown, no extra text:
+{"event": "The next story event under 30 words.", "memory": null or "A one-sentence memorable summary", "inventoryChanges": [] or ["Item name"] or ["Item A", "Item B"], "locationChange": null or "New Location Name", "locationDescription": null or "A vivid 10-15 word description of the new location."}`;
 
-Rules:
-- Introduce a surprising turn of events.
-- Maximum 20 words.
-- The twist must feel unexpected but coherent with the story.
-- Do NOT resolve the main conflict — escalate it.
-- Maintain the existing character, goal, and conflict.
-- Increase tension or humor.
-- End with suspense.
-- Output ONLY the event text, nothing else.`;
-
-export const ENDING_SYSTEM_PROMPT = `You are an absurd comedy storyteller concluding a story.
+export const DAILY_SYSTEM_PROMPT = `You generate daily events for a living comedy world. The user logs in once per day and gets one situation with 3 choices.
 
 Rules:
-- Write the FINAL event of the story.
-- Maximum 20 words.
-- Resolve the main goal and conflict.
-- Give a satisfying, funny conclusion.
-- End with a clear sense of finality.
-- Output ONLY the event text, nothing else.`;
+- The situation should reference the character's recent history (you will receive the current world state).
+- Offer 3 distinct choices (at least 2 words each).
+- Make it absurd and funny.
+- Keep the title short (2-5 words) and description vivid (2-3 sentences).
 
-export const SUMMARIZER_SYSTEM_PROMPT =
-  "You compress story plots into 3 tight sentences. Keep it funny.";
+Output ONLY valid JSON:
+{"title": "Short title", "description": "Vivid 2-3 sentence setup", "choices": ["Choice one", "Choice two", "Choice three"]}`;
 
-export const SCENE_DESCRIBER_SYSTEM_PROMPT = `You are a visual scene describer.
+export const RESOLVE_SYSTEM_PROMPT = `You generate consequences for choices made in an absurd comedy world.
 
-Given the story context, write a detailed visual description of the current scene for an AI image generator.
+The user made a choice in a daily event. Generate the outcome.
 
 Rules:
-- Describe the setting/location, characters, objects, lighting, and mood.
-- Keep it under 100 words.
-- Focus on the most visually interesting moment.
-- Return JSON with a "description" field.`;
+- 1-2 funny sentences describing what happens.
+- About 30% of the time, reward the user with a silly item.
+- The consequence should feel specific to the choice made.
 
-export async function generateSceneImage(
-  storyContext: string
-): Promise<string> {
-  if (!openai) return "";
-
-  const descCompletion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: SCENE_DESCRIBER_SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Generate a scene description for:\n\n${storyContext}`,
-      },
-    ],
-    max_tokens: 150,
-    temperature: 0.7,
-    response_format: { type: "json_object" },
-  });
-
-  const descRaw = descCompletion.choices[0]?.message?.content?.trim();
-  if (!descRaw) return "";
-
-  let description: string;
-  try {
-    const parsed = JSON.parse(descRaw) as { description?: string };
-    description = parsed.description || "";
-  } catch {
-    description = descRaw;
-  }
-
-  if (!description) return "";
-
-  const image = await openai.images.generate({
-    model: "dall-e-3",
-    prompt: description,
-    n: 1,
-    size: "1024x1024",
-    quality: "standard",
-  });
-
-  return image.data?.[0]?.url ?? "";
-}
+Output ONLY valid JSON:
+{"consequence": "What happens in 1-2 funny sentences.", "item": null or {"name": "Item Name", "description": "Brief funny description"}}`;

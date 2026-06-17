@@ -1,77 +1,180 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { SetupForm } from "@/components/SetupForm";
-import { StoryBox } from "@/components/StoryBox";
-import {
-  SCENE_INTERVAL,
-  type WorldState,
-  type StoryMode,
-  type SceneImage,
-  type EventType,
-} from "@/lib/types";
+import { useState, useEffect, useCallback } from "react";
+import { createWorld } from "@/lib/createWorld";
+import dynamic from "next/dynamic";
 
-interface StoryEvent {
-  text: string;
-  type: EventType | null;
+const WorldView = dynamic(() => import("@/components/WorldView").then((m) => m.WorldView), {
+  ssr: false,
+  loading: () => (
+    <div className="aspect-video rounded-xl border border-border bg-card flex items-center justify-center">
+      <p className="text-xs text-gray-600">Loading world...</p>
+    </div>
+  ),
+});
+import { StoryFeed } from "@/components/StoryFeed";
+import { CharacterCard } from "@/components/CharacterCard";
+import { LocationCard } from "@/components/LocationCard";
+import { InventoryCard } from "@/components/InventoryCard";
+import { ActionBar } from "@/components/ActionBar";
+import { DailyEvent } from "@/components/DailyEvent";
+import { MemoryBook } from "@/components/MemoryBook";
+import { Achievements } from "@/components/Achievements";
+import type { WorldState } from "@/types/world";
+
+const STORAGE_KEY = "one-button-story-world";
+
+function loadWorld(): WorldState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as WorldState;
+  } catch {
+    return null;
+  }
 }
 
-interface ClientState {
-  events: StoryEvent[];
-  world: WorldState;
-  summary: string;
-  sceneImages: SceneImage[];
-  isEnding: boolean;
+function saveWorld(world: WorldState): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(world));
+  } catch {}
 }
 
-const DEFAULT_WORLD: WorldState = {
-  character: "Goat accountant",
-  goal: "Deliver taxes",
-  conflict: "Dragon stole calculator",
-  location: "a mysterious cave",
-  objects: [],
-};
+function todayStr(): string {
+  return new Date().toISOString().split("T")[0];
+}
 
 export default function Home() {
-  const [setup, setSetup] = useState({
-    character: DEFAULT_WORLD.character,
-    goal: DEFAULT_WORLD.goal,
-    problem: DEFAULT_WORLD.conflict,
-  });
-  const [story, setStory] = useState<ClientState | null>(null);
+  const [world, setWorld] = useState<WorldState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
+  // Daily event state
+  const [dailyPhase, setDailyPhase] = useState<"idle" | "event" | "loading" | "result">("idle");
+  const [dailyEvent, setDailyEvent] = useState<{ title: string; description: string; choices: string[] } | null>(null);
+  const [dailyConsequence, setDailyConsequence] = useState<string | null>(null);
+  const [dailyItem, setDailyItem] = useState<string | null>(null);
+  const [dailyError, setDailyError] = useState<string | null>(null);
 
-  const handleStart = useCallback(
-    (formData: { character: string; goal: string; problem: string }) => {
-      const { character, goal, problem } = formData;
+  // Panels
+  const [showMemories, setShowMemories] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
 
-      setSetup({ character, goal, problem });
-      setStory({
-        events: [{ text: "You wake up in a mysterious cave.", type: null }],
-        world: {
-          character,
-          goal,
-          conflict: problem,
-          location: "a mysterious cave",
-          objects: [],
-        },
-        summary: "",
-        sceneImages: [],
-        isEnding: false,
+  useEffect(() => {
+    setMounted(true);
+    const saved = loadWorld();
+    const w = saved ?? createWorld();
+    setWorld(w);
+
+    // Check for daily event
+    const today = todayStr();
+    if (!w.dailyEvent || w.dailyEvent.date !== today) {
+      fetchDailyEvent(w);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mounted && world) saveWorld(world);
+  }, [world, mounted]);
+
+  const buildDailyContext = useCallback((w: WorldState): string => {
+    return [
+      `Player: ${w.player.name} (${w.player.profession})`,
+      `Location: ${w.location.name} — ${w.location.description}`,
+      `Inventory: ${w.inventory.join(", ") || "none"}`,
+      `Events seen: ${w.stats.eventsSeen}`,
+      w.memories.length > 0 ? `Recent memories: ${w.memories.slice(-2).map((m) => m.text).join(" | ")}` : "",
+    ].filter(Boolean).join("\n");
+  }, []);
+
+  const fetchDailyEvent = useCallback(async (w: WorldState) => {
+    setDailyPhase("loading");
+    try {
+      const context = buildDailyContext(w);
+      const res = await fetch("/api/daily", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context }),
       });
-      setShareUrl(null);
-      setError(null);
-    },
-    []
-  );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+
+      setDailyEvent({ title: data.title, description: data.description, choices: data.choices });
+      setDailyPhase("event");
+    } catch (err) {
+      setDailyError(err instanceof Error ? err.message : "Failed to load daily event");
+      setDailyPhase("idle");
+    }
+  }, []);
+
+  const handleDailyChoice = useCallback(async (index: number) => {
+    if (!dailyEvent || !world) return;
+
+    setDailyPhase("loading");
+    const choice = dailyEvent.choices[index];
+
+    try {
+      const res = await fetch("/api/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: dailyEvent.title,
+          description: dailyEvent.description,
+          choice,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+
+      setDailyConsequence(data.consequence);
+      setDailyItem(data.item?.name || null);
+      setDailyPhase("result");
+
+      // Save daily event result into world state
+      setWorld((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          inventory: data.item?.name && !prev.inventory.includes(data.item.name)
+            ? [...prev.inventory, data.item.name]
+            : prev.inventory,
+          dailyEvent: {
+            date: todayStr(),
+            title: dailyEvent.title,
+            description: dailyEvent.description,
+            choices: dailyEvent.choices,
+            chosenIndex: index,
+            consequence: data.consequence,
+            resolved: true,
+          },
+          stats: {
+            ...prev.stats,
+            itemsCollected: data.item?.name && !prev.inventory.includes(data.item.name)
+              ? prev.stats.itemsCollected + 1
+              : prev.stats.itemsCollected,
+          },
+        };
+      });
+    } catch (err) {
+      setDailyError(err instanceof Error ? err.message : "Failed");
+      setDailyPhase("event");
+    }
+  }, [dailyEvent, world]);
+
+  const handleDismissDaily = useCallback(() => {
+    setDailyPhase("idle");
+    setDailyEvent(null);
+    setDailyConsequence(null);
+    setDailyItem(null);
+    setDailyError(null);
+  }, []);
 
   const generateEvent = useCallback(
-    async (mode: StoryMode) => {
-      if (!story || story.isEnding) return;
+    async (mode: "continue" | "twist") => {
+      if (!world || isLoading) return;
 
       setIsLoading(true);
       setError(null);
@@ -80,140 +183,112 @@ export default function Home() {
         const res = await fetch("/api/continue", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            setup,
-            events: story.events.map((e) => e.text),
-            world: story.world,
-            summary: story.summary,
-            mode,
-          }),
+          body: JSON.stringify({ world, mode }),
         });
 
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
 
-        if (!res.ok) {
-          throw new Error(data.error || `Request failed (${res.status})`);
-        }
-
-        const newEvent: StoryEvent = {
-          text: data.text,
-          type: data.eventType ?? null,
-        };
-        const newEvents = [...story.events, newEvent];
-        const nextTurnCount = newEvents.length;
-
-        if (nextTurnCount > 0 && nextTurnCount % SCENE_INTERVAL === 0) {
-          const eventIndex = nextTurnCount - 1;
-
-          fetch("/api/scene", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              events: newEvents.map((e) => e.text),
-              world: data.state?.world ?? story.world,
-            }),
-          })
-            .then((r) => r.json())
-            .then((sceneData) => {
-              if (sceneData.imageUrl) {
-                setStory((prev) => {
-                  if (!prev) return prev;
-                  return {
-                    ...prev,
-                    sceneImages: [
-                      ...prev.sceneImages,
-                      { eventIndex, url: sceneData.imageUrl },
-                    ],
-                  };
-                });
-              }
-            })
-            .catch(() => {});
-        }
-
-        setStory((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            events: newEvents,
-            world: data.state?.world ?? prev.world,
-            summary: data.state?.summary ?? prev.summary,
-            isEnding: data.isEnding === true,
-          };
-        });
+        setWorld(data.world);
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Something went wrong"
-        );
+        setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
         setIsLoading(false);
       }
     },
-    [story, setup]
+    [world, isLoading]
   );
 
-  const saveStory = useCallback(async () => {
-    if (!story || isSaving) return;
-
-    setIsSaving(true);
-
-    try {
-      const res = await fetch("/api/stories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          events: story.events.map((e) => e.text),
-          world: story.world,
-          summary: story.summary,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Save failed");
-      }
-
-      setShareUrl(data.url);
-    } catch {
-      const text = story.events.map((e) => e.text).join("\n\n");
-      try {
-        await navigator.clipboard.writeText(text);
-        setError("Story copied to clipboard (save unavailable in this deployment)");
-      } catch {
-        setError("Could not save or copy story");
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  }, [story, isSaving]);
-
-  const reset = useCallback(() => {
-    setStory(null);
-      setShareUrl(null);
-      setError(null);
-      setIsLoading(false);
+  const handleReset = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+    setWorld(createWorld());
+    setError(null);
+    setDailyPhase("idle");
+    setDailyEvent(null);
   }, []);
 
-  if (!story) {
-    return <SetupForm onSubmit={handleStart} />;
-  }
+  if (!mounted || !world) return null;
 
   return (
-    <div className="min-h-screen bg-gray-950">
-      <StoryBox
-        events={story.events}
-        sceneImages={story.sceneImages}
-        isLoading={isLoading}
-        error={error}
-        shareUrl={shareUrl}
-        isSaving={isSaving}
-        isEnding={story.isEnding}
-        onContinue={() => generateEvent("continue")}
-        onTwist={() => generateEvent("twist")}
-        onReset={reset}
-        onSave={saveStory}
-      />
+    <div className="mx-auto max-w-lg px-4 py-6">
+      {/* Daily Event Overlay */}
+      {dailyPhase !== "idle" && (
+        <DailyEvent
+          event={dailyEvent}
+          phase={dailyPhase === "loading" ? "loading" : dailyPhase as "event" | "result"}
+          consequence={dailyConsequence}
+          newItemName={dailyItem}
+          error={dailyError}
+          onChoice={handleDailyChoice}
+          onDismiss={handleDismissDaily}
+        />
+      )}
+
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="font-display text-xl font-bold tracking-tight text-white">
+          One Button Story
+        </h1>
+        <button
+          onClick={handleReset}
+          className="text-xs text-gray-600 transition-colors hover:text-gray-400"
+        >
+          Reset
+        </button>
+      </div>
+
+      {/* World View */}
+      <WorldView world={world} />
+
+      {/* Story Feed */}
+      <div className="mt-4">
+        <StoryFeed events={world.story} />
+      </div>
+
+      {/* Info Cards */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <CharacterCard player={world.player} />
+        <LocationCard location={world.location} />
+        <InventoryCard items={world.inventory} />
+      </div>
+
+      {/* Actions */}
+      <div className="mt-4">
+        <ActionBar
+          isLoading={isLoading}
+          error={error}
+          onContinue={() => generateEvent("continue")}
+          onTwist={() => generateEvent("twist")}
+        />
+      </div>
+
+      {/* Bottom toggles */}
+      <div className="mt-4 flex gap-3">
+        <button
+          onClick={() => setShowMemories(!showMemories)}
+          className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-gray-400 transition-colors hover:text-gray-200"
+        >
+          {showMemories ? "Hide" : "View"} Memories ({world.memories.length})
+        </button>
+        <button
+          onClick={() => setShowAchievements(!showAchievements)}
+          className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-gray-400 transition-colors hover:text-gray-200"
+        >
+          {showAchievements ? "Hide" : "View"} Achievements ({world.achievements.length})
+        </button>
+      </div>
+
+      {showMemories && (
+        <div className="mt-3 animate-fade-in">
+          <MemoryBook memories={world.memories} />
+        </div>
+      )}
+
+      {showAchievements && (
+        <div className="mt-3 animate-fade-in">
+          <Achievements achievements={world.achievements} />
+        </div>
+      )}
     </div>
   );
 }
